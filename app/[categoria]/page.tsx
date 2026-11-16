@@ -41,7 +41,7 @@ function ContenidoCategoria() {
     async function fetchInventory() {
       try {
         setLoading(true);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/inventory`);
         const result = await res.json();
         if (result.status === 200 && Array.isArray(result.data)) {
           setListaProductos(result.data);
