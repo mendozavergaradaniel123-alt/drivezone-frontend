@@ -1,51 +1,58 @@
 "use client";
-import Image from "next/image";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
-import { useCart } from "../../../context/CartContext";
-import { useFavorites } from "../../../context/FavoritesContext"; // 1. Importamos el contexto de favoritos
 
-interface Manufacturer {
-  name: string;
-}
+import React, { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface Producto {
   id: string;
   name: string;
-  description?: string;
-  manufacturer: Manufacturer;
+  description: string;
+  manufacturer?: {
+    name: string;
+  };
   price: number;
-  images?: string[];
-  category?: string;
+  category: string;
   stock: number;
-  rating?: number;
+  rating: number;
+  images: string[];
 }
 
-function ContenidoProducto() {
+export default function ProductoDetallePage() {
   const params = useParams();
   const router = useRouter();
-  const productoId = params?.id as string;
-  
-  const { addToCart, totalItems } = useCart();
-  
-  // 2. Extraemos las funciones de favoritos
-  const { toggleFavorite, isFavorite } = useFavorites();
-  
+
+  const productoId = decodeURIComponent(
+    Array.isArray(params?.id) ? params.id[0] : params?.id || ""
+  ).trim();
+
   const [producto, setProducto] = useState<Producto | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [cantidad, setCantidad] = useState<number>(1);
+  const [mensajeCarrito, setMensajeCarrito] = useState<string>("");
 
   useEffect(() => {
     async function fetchProducto() {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/inventory...`);
+        setLoading(true);
+        const baseUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001").replace(/\/$/, "");
+        const res = await fetch(`${baseUrl}/inventory`);
         const result = await res.json();
-        
-        if (result.status === 200) {
-          setProducto(result.data);
-        }
+
+        const rawData: Producto[] = Array.isArray(result)
+          ? result
+          : result.status === 200 && Array.isArray(result.data)
+          ? result.data
+          : [];
+
+        const encontrado = rawData.find(
+          (item) => String(item.id).toLowerCase() === productoId.toLowerCase()
+        );
+
+        setProducto(encontrado || null);
       } catch (error) {
-        console.error("Error al cargar el producto:", error);
+        console.error("Error al obtener el producto:", error);
+        setProducto(null);
       } finally {
         setLoading(false);
       }
@@ -56,146 +63,154 @@ function ContenidoProducto() {
     }
   }, [productoId]);
 
-  const handleAddToCart = () => {
-    if (producto && producto.stock > 0) {
-      addToCart(producto);
+  const agregarAlCarrito = () => {
+    if (!producto) return;
+
+    try {
+      const carritoActual = JSON.parse(localStorage.getItem("carrito") || "[]");
+      const indiceExistente = carritoActual.findIndex((item: any) => item.id === producto.id);
+
+      if (indiceExistente >= 0) {
+        carritoActual[indiceExistente].quantity = Math.min(
+          producto.stock,
+          (carritoActual[indiceExistente].quantity || 1) + cantidad
+        );
+      } else {
+        carritoActual.push({
+          ...producto,
+          quantity: cantidad,
+        });
+      }
+
+      localStorage.setItem("carrito", JSON.stringify(carritoActual));
+      setMensajeCarrito("Producto agregado al carrito.");
+      setTimeout(() => setMensajeCarrito(""), 3000);
+    } catch (e) {
+      console.error("Error guardando en carrito:", e);
     }
   };
 
-  // 3. Verificamos si este producto en específico ya es favorito
-  const favoritoActivo = producto ? isFavorite(producto.id) : false;
-
   if (loading) {
     return (
-      <div className="bg-neutral-900 min-h-screen flex items-center justify-center text-white">
-        <p className="animate-pulse">Cargando detalles del producto...</p>
+      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+        <p className="text-neutral-400">Cargando detalle del producto...</p>
       </div>
     );
   }
 
   if (!producto) {
     return (
-      <div className="bg-neutral-900 min-h-screen flex flex-col items-center justify-center text-white gap-4">
-        <p>Producto no encontrado.</p>
-        <button onClick={() => router.back()} className="text-red-600 font-bold">Volver atrás</button>
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 px-4">
+        <p className="text-lg text-neutral-200">Producto no encontrado.</p>
+        <button
+          onClick={() => router.back()}
+          className="text-red-500 font-semibold hover:underline"
+        >
+          Volver atrás
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="bg-neutral-900 min-h-screen flex justify-center">
-      <main className="bg-black w-full max-w-md min-h-screen text-white pb-24 font-sans relative shadow-2xl border-x border-gray-800 overflow-y-auto">
-        
-        {/* Cabecera transparente flotante con Carrito y Favoritos */}
-        <header className="absolute top-0 w-full flex justify-between items-center p-6 z-50">
-          <button 
-            onClick={() => router.back()} 
-            className="w-10 h-10 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white text-xl hover:bg-red-600 transition-colors"
-          >
-            ←
-          </button>
-          
-          <div className="flex gap-3">
-            {/* 4. Botón de favoritos interactivo en la cabecera */}
-            <button 
-              onClick={() => toggleFavorite(producto)}
-              className={`w-10 h-10 backdrop-blur-md rounded-full flex items-center justify-center text-xl transition-colors ${
-                favoritoActivo ? 'bg-red-600 text-white' : 'bg-black/50 text-white hover:bg-red-600'
-              }`}
-              title={favoritoActivo ? "Quitar de favoritos" : "Añadir a favoritos"}
-            >
-              {favoritoActivo ? '❤️' : '🤍'}
-            </button>
+    <div className="min-h-screen bg-black text-white px-4 py-8 max-w-5xl mx-auto">
+      <button
+        onClick={() => router.back()}
+        className="text-sm text-neutral-400 hover:text-white mb-6 inline-flex items-center gap-2"
+      >
+        ← Volver atrás
+      </button>
 
-            <Link href="/carrito" className="w-10 h-10 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white text-xl hover:bg-red-600 transition-colors relative">
-              🛒
-              {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-black">
-                  {totalItems}
-                </span>
-              )}
-            </Link>
-          </div>
-        </header>
-
-        {/* Imagen del Producto */}
-        <div className="w-full h-80 bg-white relative rounded-b-3xl shadow-lg pt-12 p-6 flex items-center justify-center">
-          <div className="relative w-full h-full">
-            <Image 
-              src={producto.images?.[0] || "/rin.png"} 
-              alt={producto.name} 
-              fill 
-              className="object-contain drop-shadow-xl" 
-            />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8">
+        {/* Imagen del producto */}
+        <div className="w-full h-80 md:h-96 bg-neutral-800 rounded-2xl overflow-hidden flex items-center justify-center">
+          <img
+            src={producto.images?.[0] || "/placeholder.png"}
+            alt={producto.name}
+            className="w-full h-full object-cover"
+          />
         </div>
 
-        {/* Detalles e Información */}
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <span className="text-red-600 text-xs font-bold uppercase tracking-wider">
-                {producto.category} • {producto.manufacturer.name}
+        {/* Información y acciones */}
+        <div className="flex flex-col justify-between space-y-6">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-red-500 bg-red-500/10 px-3 py-1 rounded-full">
+                {producto.category}
               </span>
-              <h1 className="text-2xl font-black mt-1 leading-tight">{producto.name}</h1>
+              <span className="text-sm text-yellow-400 font-semibold">
+                ★ {producto.rating ?? 5}
+              </span>
             </div>
-          </div>
 
-          {/* Precio y Rating */}
-          <div className="flex justify-between items-end mt-4 mb-6 pb-6 border-b border-neutral-800">
-            <div>
-              <p className="text-3xl font-black">${producto.price.toLocaleString()} COP</p>
-              <p className={`text-sm font-bold mt-1 ${producto.stock > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {producto.stock > 0 ? `✓ En stock (${producto.stock} disponibles)` : '✗ Agotado'}
+            <h1 className="text-2xl md:text-3xl font-extrabold mt-3">{producto.name}</h1>
+            {producto.manufacturer?.name && (
+              <p className="text-sm text-neutral-400 mt-1">
+                Fabricante: <span className="text-white font-medium">{producto.manufacturer.name}</span>
               </p>
-            </div>
-            <div className="flex items-center gap-1 bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-              <span className="text-yellow-500 text-sm">★</span>
-              <span className="font-bold text-sm">{producto.rating || "4.5"}</span>
-            </div>
-          </div>
+            )}
 
-          {/* Descripción Técnica */}
-          <div className="mb-6">
-            <h3 className="font-bold text-lg mb-2">Descripción del producto</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              {producto.description || "Este es un repuesto automotriz de alta calidad garantizado para brindar el mejor rendimiento en tu vehículo. Fabricado bajo los más estrictos estándares de seguridad."}
+            <p className="text-3xl font-black text-white mt-5">
+              ${producto.price.toLocaleString("es-CO")}
+            </p>
+
+            <p className="text-neutral-300 text-sm leading-relaxed mt-4">
+              {producto.description}
+            </p>
+
+            <p className="text-xs text-neutral-400 mt-4">
+              Disponibilidad:{" "}
+              <span className={producto.stock > 0 ? "text-green-400 font-semibold" : "text-red-500"}>
+                {producto.stock > 0 ? `${producto.stock} unidades en stock` : "Agotado"}
+              </span>
             </p>
           </div>
-        </div>
 
-        {/* Barra Inferior de Compra Fija */}
-        <div className="fixed bottom-0 w-full max-w-md bg-neutral-950 border-t border-gray-800 p-4 z-50 flex gap-3">
-          <button
-            type="button"
-            onClick={() => router.push(`/soporte?producto=${encodeURIComponent(producto.name)}`)}
-            title="Consultar sobre este producto"
-            className="bg-neutral-800 hover:bg-neutral-700 text-white p-3.5 rounded-xl text-xl flex items-center justify-center transition-colors cursor-pointer"
-          >
-          💬
-          </button>
-          <button 
-            onClick={handleAddToCart}
-            disabled={producto.stock === 0}
-            className={`flex-1 font-bold py-3.5 rounded-xl shadow-lg transition-colors flex items-center justify-center gap-2 text-sm ${
-              producto.stock > 0 
-                ? 'bg-red-600 hover:bg-red-700 text-white' 
-                : 'bg-neutral-800 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            🛒 {producto.stock > 0 ? 'Agregar al carrito' : 'Sin inventario'}
-          </button>
-        </div>
+          <div className="space-y-4 pt-4 border-t border-neutral-800">
+            {/* Selector de cantidad */}
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-neutral-400">Cantidad:</span>
+              <div className="flex items-center bg-neutral-800 rounded-xl border border-neutral-700">
+                <button
+                  onClick={() => setCantidad((c) => Math.max(1, c - 1))}
+                  className="px-3.5 py-1.5 text-lg font-bold hover:text-red-500"
+                >
+                  -
+                </button>
+                <span className="px-4 py-1.5 font-semibold">{cantidad}</span>
+                <button
+                  onClick={() => setCantidad((c) => Math.min(producto.stock || 1, c + 1))}
+                  className="px-3.5 py-1.5 text-lg font-bold hover:text-red-500"
+                >
+                  +
+                </button>
+              </div>
+            </div>
 
-      </main>
+            {/* Botones de acción */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={agregarAlCarrito}
+                disabled={producto.stock <= 0}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-neutral-700 text-white font-bold py-3 px-6 rounded-xl transition"
+              >
+                Agregar al carrito
+              </button>
+
+              <Link
+                href={`/soporte?producto=${encodeURIComponent(producto.name)}`}
+                className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white font-semibold py-3 px-6 rounded-xl text-center border border-neutral-700 transition"
+              >
+                Consultar en soporte
+              </Link>
+            </div>
+
+            {mensajeCarrito && (
+              <p className="text-sm text-green-400 font-medium text-center">{mensajeCarrito}</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
-  );
-}
-
-export default function ProductoDetalle() {
-  return (
-    <Suspense fallback={<div className="bg-black min-h-screen text-white flex items-center justify-center">Cargando...</div>}>
-      <ContenidoProducto />
-    </Suspense>
   );
 }
