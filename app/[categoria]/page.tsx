@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,24 +18,24 @@ interface Producto {
   images: string[];
 }
 
-export default function CategoriaPage() {
+function CategoriaContenido() {
   const params = useParams();
   const router = useRouter();
 
-  // Extraer categoría de la URL (ej: "aceites", "baterias", "llantas", "rines")
   const categoriaSlug = decodeURIComponent(
     Array.isArray(params?.categoria) ? params.categoria[0] : params?.categoria || ""
   );
 
-  // Función para normalizar textos (sin tildes, minúsculas y sin espacios extra)
-  const normalizar = (texto: string) =>
-    texto
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim();
+  const normalizar = useCallback(
+    (texto: string) =>
+      texto
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim(),
+    []
+  );
 
-  // Capitalizar primera letra para mostrar en pantalla (ej: "aceites" -> "Aceites")
   const categoriaNombre = categoriaSlug
     ? categoriaSlug.charAt(0).toUpperCase() + categoriaSlug.slice(1).toLowerCase()
     : "";
@@ -63,14 +63,12 @@ export default function CategoriaPage() {
         const res = await fetch(`${baseUrl}/inventory`);
         const result = await res.json();
 
-        // Soporta tanto { status: 200, data: [...] } como un array directo [...]
         const rawData: Producto[] = Array.isArray(result)
           ? result
           : result.status === 200 && Array.isArray(result.data)
           ? result.data
           : [];
 
-        // Filtrar EXCLUSIVAMENTE los productos que pertenecen a la categoría de la URL
         const filtradosPorCategoria = rawData.filter(
           (p) => normalizar(p.category || "") === normalizar(categoriaSlug)
         );
@@ -97,9 +95,8 @@ export default function CategoriaPage() {
     if (categoriaSlug) {
       fetchInventory();
     }
-  }, [categoriaSlug]);
+  }, [categoriaSlug, normalizar]);
 
-  // Aplicar filtros adicionales (marca, búsqueda y precio) sobre los productos de la categoría
   const productosFiltrados = useMemo(() => {
     return listaProductos.filter((prod) => {
       const coincideMarca = marcaSeleccionada
@@ -124,7 +121,6 @@ export default function CategoriaPage() {
 
   return (
     <div className="min-h-screen bg-black text-white px-4 py-6 max-w-6xl mx-auto">
-      {/* Barra superior */}
       <div className="flex items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3 bg-white text-black px-4 py-2 rounded-full font-semibold w-full max-w-xs">
           <span>🔍</span>
@@ -145,14 +141,12 @@ export default function CategoriaPage() {
         </button>
       </div>
 
-      {/* Contador de resultados */}
       <p className="text-sm text-neutral-300 mb-6 font-medium">
         {loading
           ? "Cargando productos..."
           : `${productosFiltrados.length} ${productosFiltrados.length === 1 ? "resultado" : "resultados"}`}
       </p>
 
-      {/* Grid de productos */}
       {loading ? (
         <div className="text-center py-20 text-neutral-400">Cargando catálogo de {categoriaNombre}...</div>
       ) : productosFiltrados.length === 0 ? (
@@ -169,6 +163,7 @@ export default function CategoriaPage() {
             >
               <div>
                 <div className="w-full h-44 bg-neutral-800 rounded-xl overflow-hidden mb-4 flex items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={producto.images?.[0] || "/placeholder.png"}
                     alt={producto.name}
@@ -193,7 +188,6 @@ export default function CategoriaPage() {
         </div>
       )}
 
-      {/* Modal de Filtros */}
       {modalFiltrosAbierto && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 w-full max-w-md space-y-5">
@@ -281,5 +275,19 @@ export default function CategoriaPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CategoriaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <p className="text-neutral-400">Cargando categoría...</p>
+        </div>
+      }
+    >
+      <CategoriaContenido />
+    </Suspense>
   );
 }

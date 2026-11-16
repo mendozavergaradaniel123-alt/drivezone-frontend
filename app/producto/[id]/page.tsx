@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -18,7 +18,11 @@ interface Producto {
   images: string[];
 }
 
-export default function ProductoDetallePage() {
+interface ItemCarrito extends Producto {
+  quantity: number;
+}
+
+function ProductoDetalleContenido() {
   const params = useParams();
   const router = useRouter();
 
@@ -67,8 +71,8 @@ export default function ProductoDetallePage() {
     if (!producto) return;
 
     try {
-      const carritoActual = JSON.parse(localStorage.getItem("carrito") || "[]");
-      const indiceExistente = carritoActual.findIndex((item: any) => item.id === producto.id);
+      const carritoActual: ItemCarrito[] = JSON.parse(localStorage.getItem("carrito") || "[]");
+      const indiceExistente = carritoActual.findIndex((item) => item.id === producto.id);
 
       if (indiceExistente >= 0) {
         carritoActual[indiceExistente].quantity = Math.min(
@@ -122,8 +126,8 @@ export default function ProductoDetallePage() {
       </button>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8">
-        {/* Imagen del producto */}
         <div className="w-full h-80 md:h-96 bg-neutral-800 rounded-2xl overflow-hidden flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={producto.images?.[0] || "/placeholder.png"}
             alt={producto.name}
@@ -131,7 +135,6 @@ export default function ProductoDetallePage() {
           />
         </div>
 
-        {/* Información y acciones */}
         <div className="flex flex-col justify-between space-y-6">
           <div>
             <div className="flex items-center justify-between gap-2">
@@ -167,7 +170,6 @@ export default function ProductoDetallePage() {
           </div>
 
           <div className="space-y-4 pt-4 border-t border-neutral-800">
-            {/* Selector de cantidad */}
             <div className="flex items-center gap-4">
               <span className="text-sm text-neutral-400">Cantidad:</span>
               <div className="flex items-center bg-neutral-800 rounded-xl border border-neutral-700">
@@ -187,7 +189,6 @@ export default function ProductoDetallePage() {
               </div>
             </div>
 
-            {/* Botones de acción */}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={agregarAlCarrito}
@@ -212,5 +213,19 @@ export default function ProductoDetallePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ProductoDetallePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black text-white flex items-center justify-center">
+          <p className="text-neutral-400">Cargando producto...</p>
+        </div>
+      }
+    >
+      <ProductoDetalleContenido />
+    </Suspense>
   );
 }
